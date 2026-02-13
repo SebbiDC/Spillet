@@ -34,6 +34,8 @@ y_velocity = 0
 gravity = 0.6
 jump_strength = -12
 on_ground = False
+drop_down = False       # True while dropping
+drop_platform = None    # platform being dropped through
 
 x = BASE_WIDTH // 2 - size // 2
 y = BASE_HEIGHT - size - 50
@@ -56,9 +58,9 @@ bullet_height = 4
 bullet_speed = 8
 bullets = []
 
-fire_delay = 250  # milliseconds
+fire_delay = 250  # ms
 last_shot_time = 0
-shooting = False  # True while left mouse button held
+shooting = False  # True when left mouse button held
 
 # ------------------------
 # Camera
@@ -86,7 +88,20 @@ while True:
                 y_velocity = jump_strength
                 on_ground = False
 
-        # Mouse button hold for autofire
+            # Drop through platforms
+            if event.key == pygame.K_s:
+                for plat in platforms:
+                    # Check if standing on top of platform
+                    if (player_rect.bottom == plat.top and
+                        player_rect.right > plat.left and
+                        player_rect.left < plat.right):
+                        drop_down = True
+                        drop_platform = plat
+                        y_velocity = 5  # small push to start falling
+                        on_ground = False
+                        break
+
+        # Autofire
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             shooting = True
         if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
@@ -115,24 +130,34 @@ while True:
     # COLLISIONS
     # ------------------------
     on_ground = False
+
+    # Ground collision
     if player_rect.colliderect(ground_rect) and y_velocity >= 0:
         y = ground_rect.top - size
         y_velocity = 0
         on_ground = True
         player_rect.y = y
+
+    # Platform collisions
     for plat in platforms:
+        if drop_down and plat == drop_platform:
+            continue  # skip collision with platform being dropped through
         if player_rect.colliderect(plat) and y_velocity >= 0:
             y = plat.top - size
             y_velocity = 0
             on_ground = True
             player_rect.y = y
 
+    # Reset drop_down once fully below platform
+    if drop_down and player_rect.top > drop_platform.bottom:
+        drop_down = False
+        drop_platform = None
+
     # ------------------------
     # BULLETS AUTOFIRE
     # ------------------------
     current_time = pygame.time.get_ticks()
     if shooting and current_time - last_shot_time >= fire_delay:
-        # Convert mouse to base coordinates
         mouse_x = pygame.mouse.get_pos()[0] / scale_x + camera_x
         mouse_y = pygame.mouse.get_pos()[1] / scale_y + camera_y
 
@@ -162,7 +187,6 @@ while True:
     for bullet in bullets[:]:
         bullet["rect"].x += bullet["vx"]
         bullet["rect"].y += bullet["vy"]
-
         if (bullet["rect"].x < 0 or bullet["rect"].x > BASE_WIDTH or
             bullet["rect"].y < 0 or bullet["rect"].y > BASE_HEIGHT):
             bullets.remove(bullet)
