@@ -1,5 +1,6 @@
 import pygame
 import sys
+import math
 
 pygame.init()
 
@@ -32,7 +33,9 @@ ground_y = HEIGHT - 50
 bullet_width = 10
 bullet_height = 4
 bullet_speed = 8
-bullets = []
+bullets = []  # Each bullet is [x, y, vx, vy]
+last_shot_time = 0
+fire_rate = 300  # Milliseconds between shots
 
 
 
@@ -55,8 +58,7 @@ while True:
     if keys[pygame.K_a]:
         square_x -= speed
     if keys[pygame.K_d]:
-        square_x += speed
-        
+        square_x += speed   
         
     # Apply gravity
     y_velocity += gravity
@@ -68,17 +70,23 @@ while True:
         y_velocity = 0
         on_ground = True
         
-    # Fire bullet
-    if event.type == pygame.KEYDOWN:
-        if event.key == pygame.K_SPACE:
+        # Fire bullet
+    if pygame.mouse.get_pressed()[0]:
+        now = pygame.time.get_ticks()
+        if now - last_shot_time >= fire_rate:
             bullet_x = square_x + square_size
             bullet_y = square_y + square_size // 2 - bullet_height // 2
-            bullets.append([bullet_x, bullet_y])
+            mx, my = pygame.mouse.get_pos()
+            dx, dy = mx - bullet_x, my - bullet_y
+            dist = math.sqrt(dx**2 + dy**2) or 1
+            bullets.append([bullet_x, bullet_y, (dx/dist)*bullet_speed, (dy/dist)*bullet_speed])
+            last_shot_time = now
 
     # Move bullets
     for bullet in bullets[:]:
-        bullet[0] += bullet_speed
-        if bullet[0] > WIDTH:
+        bullet[0] += bullet[2]
+        bullet[1] += bullet[3]
+        if bullet[0] > WIDTH or bullet[0] < 0 or bullet[1] > HEIGHT or bullet[1] < 0:
             bullets.remove(bullet)
 
 
@@ -100,7 +108,7 @@ while True:
         pygame.draw.rect(
             screen,
             (255, 50, 50),
-            (bullet[0], bullet[1], bullet_width, bullet_height)
+            (int(bullet[0]), int(bullet[1]), bullet_width, bullet_height)
     )
         
     
