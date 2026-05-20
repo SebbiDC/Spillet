@@ -33,8 +33,7 @@ gravity = 0.6
 jump_strength = -12
 on_ground = False
 
-# Ground
-ground_y = HEIGHT - 50
+
 
 # Bullets
 bullet_width = 10
@@ -68,7 +67,7 @@ map_layout = [
     "10000000000000000000000000000000000000000000000000000000000000000001",
     "10000000000000000000000000000000000000000000000000000000000000000001",
     "10000000000000000000000000000000000000000000000000000000000000000001",
-    "10000000000000000000000010000000000000000000000000000000000000000001",
+    "10000000000000000222200010000000000000000000000000000000000000000001",
     "10000000000000000000000000000000000000000000000000000000000000000001",
     "11111111111111111111111111111111111111111111111111111111111111111111",
 ]
@@ -115,16 +114,9 @@ while True:
         square_x -= speed
     if keys[pygame.K_d]:
         square_x += speed
+        
 
-    # Gravity
-    y_velocity += gravity
-    square_y += y_velocity
-
-    # Ground collision
-    if square_y + square_size >= ground_y:
-        square_y = ground_y - square_size
-        y_velocity = 0
-        on_ground = True
+ 
 
     # Map collision
     on_ground_this_frame = False
@@ -143,6 +135,8 @@ while True:
                     square_y = wall.top - square_size
                     y_velocity = 0
                     on_ground_this_frame = True
+            
+            
             else:
                 if min_overlap == overlap_top:
                     square_y = wall.top - square_size
@@ -155,9 +149,22 @@ while True:
                     square_x = wall.left - square_size
                 elif min_overlap == overlap_right:
                     square_x = wall.right
+                    
+    if on_ground == True:
+        gravity_toggle = 1
+        
+    else:
+        gravity_toggle = 0
+                    
+       # Gravity
+    if gravity_toggle == 0:
+         y_velocity += gravity
+         square_y += y_velocity
+
 
     if on_ground_this_frame:
         on_ground = True
+
 
     # Shooting
     if pygame.mouse.get_pressed()[0]:
