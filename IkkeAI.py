@@ -1,6 +1,7 @@
 import pygame
 import sys
 import math
+import random
 
 pygame.init()
 
@@ -14,6 +15,7 @@ clock = pygame.time.Clock()
 WHITE = (240, 240, 240)
 BLUE = (0, 150, 255)
 DARK = (30, 30, 30)
+ORANGE = (255, 165, 0)
 
 # Camera
 camera_x = 0
@@ -27,6 +29,9 @@ square_size = 50
 square_x = WIDTH // 2
 square_y = HEIGHT // 2
 speed = 5
+player_hp = 5
+player_max_hp = 5
+player_damage_cooldown = 5
 
 y_velocity = 0
 gravity = 0.6
@@ -36,12 +41,18 @@ on_ground = False
 
 
 # Bullets
-bullet_width = 10
-bullet_height = 4
+bullet_width = 5
+bullet_height = 5
 bullet_speed = 8
 bullets = []
 last_shot_time = 0
 fire_rate = 300
+
+wave_composition = {
+    "grubb": 5
+}
+
+
 
 # Map
 TILE_SIZE = 50
@@ -68,7 +79,7 @@ map_layout = [
     "10000000000000000000000000000000000000000000000000000000000000000001",
     "10000000000000000000000000000000000000000000000000000000000000000001",
     "10000000000000000222200010000000000000000000000000000000000000000001",
-    "10000000000000000000000000000000000000000000000000000000000000000001",
+    "10000000000000000000000000000003000000000000000000000000000000000001",
     "11111111111111111111111111111111111111111111111111111111111111111111",
 ]
 
@@ -84,6 +95,8 @@ def draw_map(surface):
                 pygame.draw.rect(surface, WHITE, (sx, sy, TILE_SIZE, TILE_SIZE))
             elif tile == "2":
                 pygame.draw.rect(surface, BLUE, (sx, sy + PLATFORM_HEIGHT, TILE_SIZE, PLATFORM_HEIGHT))
+            elif tile == "3":
+                pygame.draw.rect(surface, ORANGE, (sx, sy, TILE_SIZE, TILE_SIZE))
 
 def get_wall_rects():
     walls = []
@@ -97,6 +110,39 @@ def get_wall_rects():
                 walls.append(("platform", pygame.Rect(x, y + PLATFORM_HEIGHT, TILE_SIZE, PLATFORM_HEIGHT)))
     return walls
 
+#grubb spawn points
+def get_spawn_points():
+    spawns = []
+    for row_index, row in enumerate(map_layout):
+        for col_index, tile in enumerate(row):
+            if tile == "3":
+                x = col_index * TILE_SIZE
+                y = row_index * TILE_SIZE
+                spawns.append((x, y))
+    
+    return spawns
+
+# Monters
+def spawn_wave(wave_number):
+    grubbs = []
+    for enemy_type, count in wave_composition.items():
+        for i in range(count * wave_number):
+            x, y = random.choice(spawn_points)
+            if enemy_type == "grubb":
+                grubbs.append({
+                    "type": "grubb",
+                    "x": x, "y": y,
+                    "speed": 2,
+                    "direction": random.choice([-1, 1]),
+                    "hp": 3
+                })
+    return grubbs
+
+wave = 0
+spawn_points = get_spawn_points()
+grubbs = []
+wave_active = False
+
 # Game loop
 while True:
     for event in pygame.event.get():
@@ -108,6 +154,10 @@ while True:
             if event.key == pygame.K_SPACE and on_ground:
                 y_velocity = jump_strength
                 on_ground = False
+            if event.key == pygame.K_h and not wave_active:
+                wave_active = True
+                wave += 1
+                grubbs = spawn_wave(wave)
 
     keys = pygame.key.get_pressed()
     if keys[pygame.K_a]:
@@ -164,6 +214,39 @@ while True:
 
     if on_ground_this_frame:
         on_ground = True
+        
+        #grubbs
+    for grubb in grubbs[:]:
+        grubb["x"] += grubb["speed"] * grubb["direction"]
+        grubb_rect = pygame.Rect(grubb["x"], grubb["y"], TILE_SIZE, TILE_SIZE)
+
+        for tile_type, wall in get_wall_rects():
+            if grubb_rect.colliderect(wall):
+                grubb["direction"] *= -1
+                grubb["x"] += grubb["speed"] * grubb["direction"]
+                break
+
+        foran_x = grubb["x"] + (TILE_SIZE if grubb["direction"] == 1 else 0)
+        if not any(w.collidepoint(foran_x, grubb["y"] + TILE_SIZE + 1) for _, w in get_wall_rects()):
+            grubb["direction"] *= -1
+
+        for bullet in bullets[:]:
+            if grubb_rect.colliderect(pygame.Rect(bullet[0], bullet[1], bullet_width, bullet_height)):
+                grubb["hp"] -= 1
+                bullets.remove(bullet)
+                if grubb["hp"] <= 0:
+                    grubbs.remove(grubb)
+                break
+
+        if grubb in grubbs and grubb_rect.colliderect(player_rect) and player_damage_cooldown <= 0:
+            player_hp -= 1
+            player_damage_cooldown = 30
+
+    if player_damage_cooldown > 0:
+        player_damage_cooldown -= 1
+
+    if len(grubbs) == 0 and wave_active:
+        wave_active = False
 
 
     # Shooting
@@ -217,6 +300,14 @@ while True:
             screen,
             (255, 50, 50),
             (*apply_camera(bullet[0], bullet[1]), bullet_width, bullet_height)
+        )
+
+    # Grubbs
+    for grubb in grubbs:
+        pygame.draw.rect(
+            screen,
+            (255, 0, 0),
+            (*apply_camera(grubb["x"], grubb["y"]), TILE_SIZE, TILE_SIZE)
         )
 
     pygame.display.flip()
