@@ -32,13 +32,16 @@ speed = 5
 player_hp = 5
 player_max_hp = 5
 player_damage_cooldown = 5
+gold_fetch = 10
+gold = 0
 
+
+
+# Physics
 y_velocity = 0
 gravity = 0.6
 jump_strength = -12
 on_ground = False
-
-
 
 # Bullets
 bullet_width = 5
@@ -47,12 +50,12 @@ bullet_speed = 8
 bullets = []
 last_shot_time = 0
 fire_rate = 300
+damage = 1
 
+# Wave settings
 wave_composition = {
-    "grubb": 5
+    "grubb": 20
 }
-
-
 
 # Map
 TILE_SIZE = 50
@@ -60,29 +63,30 @@ PLATFORM_HEIGHT = TILE_SIZE // 2
 
 map_layout = [
     "11111111111111111111111111111111111111111111111111111111111111111111",
-    "10000000000010000000000000000000000000000000000000000000000000000001",
-    "10000000000010000000000000000000000000000000000000000000000000000001",
-    "10020000000010000000000000000000000000000000000000000000000000000001",
-    "10000000200010000000000000000000000000000000000000000000000000000001",
-    "10000020000010000000000000000000000000000000000000000000000000000001",
-    "10111111111010000000000000000000000000000000000000000000000000000001",
-    "10000000000010000000000000000000000000000000000000000000000000000001",
-    "10000000000010000000000000000000000000000000000000000000000000000001",
-    "10000000000010000000000000000000000000000000000000000000000000000001",
-    "10000000000010000000000000000000001000000001000000000000000000000001",
-    "10000000000010000000000000110000000000000000000000000000000000000001",
-    "10000000000010000000000000000000000000000000000000000000000000000001",
-    "10000000000010000000000000000000000000000000000000000000000000000001",
-    "10000000000010000000000000000000000000000000000000000000000000000001",
-    "10000000000010000000000000200000000000000000000000000000000000000001",
     "10000000000000000000000000000000000000000000000000000000000000000001",
     "10000000000000000000000000000000000000000000000000000000000000000001",
     "10000000000000000000000000000000000000000000000000000000000000000001",
-    "10000000000000000222200010000000000000000000000000000000000000000001",
-    "10000000000000000000000000000003000000000000000000000000000000000001",
+    "10000000000000000000000000000000000000000000000000000000000000000001",
+    "10000000000000000000000000000000000000000000000000000000000000000001",
+    "10000000000000000000000000000000000000000000000000000000000000000001",
+    "10000000000000000000000000000000000000000000000000000000000000000001",
+    "10000000000000000000000000000000000000000000000000000000000000000001",
+    "10000000000000000000000000000000000000000000000000000000000000000001",
+    "10000000000000000000000000000000000000000000000000000000000000000001",
+    "10000000000000000000000000000000000000000000000000000000000000000001",
+    "10000000000000000002222220000000000000000000000000000000000000000001",
+    "10003000000000000000000000000000000030000000022200222000000000000001",
+    "11111111111111220000000002200002111111100000000000000000000000000001",
+    "10000000000000000000300000000000000000000000000000000000000000000001",
+    "10000000000000000222222000000000000000000000000000000000000000000001",
+    "10000000000000000000000000030000000000000000000000000000000000000001",
+    "10000222000000000000001000222200000000000022220000000003000000000001",
+    "11000000000001000000011000000000000000000000000000011111100000000011",
+    "11100030000111000300111000000000000300000000000000111111110003000111",
     "11111111111111111111111111111111111111111111111111111111111111111111",
 ]
 
+# Draw map tiles
 def draw_map(surface):
     for row_index, row in enumerate(map_layout):
         for col_index, tile in enumerate(row):
@@ -98,6 +102,7 @@ def draw_map(surface):
             elif tile == "3":
                 pygame.draw.rect(surface, ORANGE, (sx, sy, TILE_SIZE, TILE_SIZE))
 
+# Build collision rectangles from map
 def get_wall_rects():
     walls = []
     for row_index, row in enumerate(map_layout):
@@ -110,7 +115,7 @@ def get_wall_rects():
                 walls.append(("platform", pygame.Rect(x, y + PLATFORM_HEIGHT, TILE_SIZE, PLATFORM_HEIGHT)))
     return walls
 
-#grubb spawn points
+# Get spawn point positions from map
 def get_spawn_points():
     spawns = []
     for row_index, row in enumerate(map_layout):
@@ -119,32 +124,55 @@ def get_spawn_points():
                 x = col_index * TILE_SIZE
                 y = row_index * TILE_SIZE
                 spawns.append((x, y))
-    
     return spawns
 
-# Monters
+# Build a queue of monsters for the wave
 def spawn_wave(wave_number):
-    grubbs = []
+    queue = []
     for enemy_type, count in wave_composition.items():
         for i in range(count * wave_number):
-            x, y = random.choice(spawn_points)
+            x, y = random.choice(get_spawn_points())
             if enemy_type == "grubb":
-                grubbs.append({
+                queue.append({
                     "type": "grubb",
                     "x": x, "y": y,
                     "speed": 2,
                     "direction": random.choice([-1, 1]),
-                    "hp": 3
+                    "hp": 3,
+                    "vy": 0
                 })
-    return grubbs
+    return queue
 
+def roll_shop():
+    return random.sample(all_cards, 3)
+
+# Wave state
 wave = 0
-spawn_points = get_spawn_points()
 grubbs = []
 wave_active = False
+spawn_queue = []
+spawn_timer = 0
+
+
+# cards
+all_cards = [
+    {"name": "Vigor - Max HP +1",             "price": 100, "effect": "max_hp"},
+    {"name": "Sprint - Speed +1",             "price": 35,  "effect": "speed"},
+    {"name": "Gattling - Fire rate +1",       "price": 100, "effect": "fire_rate"},
+    {"name": "Greed - Gold gain x1.2",        "price": 95,  "effect": "gold_gain"},
+    {"name": "High caliber - Damage +1",      "price": 200, "effect": "gun_dmg"},
+    {"name": "Bandage - Recover health",      "price": 60,  "effect": "current_hp"},
+    {"name": "Leg day - Jump higher",         "price": 60,  "effect": "jump_height"}
+    ]
+shop_cards = roll_shop()
+shop_open = False
+
+
+
 
 # Game loop
 while True:
+    # Events
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -157,21 +185,72 @@ while True:
             if event.key == pygame.K_h and not wave_active:
                 wave_active = True
                 wave += 1
-                grubbs = spawn_wave(wave)
+                spawn_queue = spawn_wave(wave)
+                spawn_timer = 60
+            if event.key == pygame.K_b:
+                shop_open = not shop_open
+        
+        if event.type == pygame.MOUSEBUTTONDOWN and shop_open:
+            mx, my = pygame.mouse.get_pos()
+            for i, card in enumerate(shop_cards):
+                card_x = 400 + i * 200
+                card_y = 400
+                card_rect = pygame.Rect(card_x, card_y, 180, 250)
+                if card_rect.collidepoint(mx, my) and gold >= card["price"]:
+                    gold -= card["price"]
+                    shop_cards.pop(i)
+                    
+                    # Give the buff
+                    if card["effect"] == "max_hp":
+                        player_max_hp += 1
+                        
+                    if card["effect"] == "speed":
+                        speed += 1
+                    
+                    if card["effect"] == "fire_rate":
+                        fire_rate -= 50
+                        
+                    if card["effect"] == "gold_gain":
+                        gold_fetch *= 1.2
+                        
+                    if card["effect"] == "gun_dmg":
+                        damage += 1
+                    
+                    if card["effect"] == "current_hp":
+                        player_hp += player_max_hp // 2
+                        
+                    if card["effect"] == "current_hp":
+                        jump_strength -= 100
+                    break
+            
+            # Reroll button
+            reroll_rect = pygame.Rect(400, 680, 200, 50)
+            if reroll_rect.collidepoint(mx, my) and gold >= 25:
+                gold -= 25
+                shop_cards = roll_shop()
+                                 
 
+    # Player movement
     keys = pygame.key.get_pressed()
     if keys[pygame.K_a]:
         square_x -= speed
     if keys[pygame.K_d]:
         square_x += speed
-        
-
- 
 
     # Map collision
-    on_ground_this_frame = False
-    player_rect = pygame.Rect(square_x, square_y, square_size, square_size)
+    under_y = square_y + square_size + 1
+    has_floor = any(w.collidepoint(square_x + square_size // 2, under_y) for _, w in get_wall_rects())
+    if on_ground and not has_floor:
+        on_ground = False
 
+    if on_ground:
+        y_velocity = 0
+    else:
+        y_velocity += gravity
+        y_velocity = min(y_velocity, 20)
+    square_y += y_velocity
+
+    player_rect = pygame.Rect(square_x, square_y, square_size, square_size)
     for tile_type, wall in get_wall_rects():
         if player_rect.colliderect(wall):
             overlap_left = player_rect.right - wall.left
@@ -184,14 +263,12 @@ while True:
                 if min_overlap == overlap_top and y_velocity >= 0:
                     square_y = wall.top - square_size
                     y_velocity = 0
-                    on_ground_this_frame = True
-            
-            
+                    on_ground = True
             else:
                 if min_overlap == overlap_top:
                     square_y = wall.top - square_size
                     y_velocity = 0
-                    on_ground_this_frame = True
+                    on_ground = True
                 elif min_overlap == overlap_bottom:
                     square_y = wall.bottom
                     y_velocity = 0
@@ -199,61 +276,114 @@ while True:
                     square_x = wall.left - square_size
                 elif min_overlap == overlap_right:
                     square_x = wall.right
-                    
-    if on_ground == True:
-        gravity_toggle = 1
-        
-    else:
-        gravity_toggle = 0
-                    
-       # Gravity
-    if gravity_toggle == 0:
-         y_velocity += gravity
-         square_y += y_velocity
+            player_rect = pygame.Rect(square_x, square_y, square_size, square_size)
 
+    # Spawn queue
+    if spawn_queue:
+        spawn_timer -= 1
+        if spawn_timer <= 0:
+            grubbs.append(spawn_queue.pop(0))
+            spawn_timer = 60
 
-    if on_ground_this_frame:
-        on_ground = True
-        
-        #grubbs
+    # Grubbs
     for grubb in grubbs[:]:
+
+        # Horizontal movement
         grubb["x"] += grubb["speed"] * grubb["direction"]
         grubb_rect = pygame.Rect(grubb["x"], grubb["y"], TILE_SIZE, TILE_SIZE)
 
+        # Horizontal wall collision
         for tile_type, wall in get_wall_rects():
-            if grubb_rect.colliderect(wall):
+            if tile_type == "solid" and grubb_rect.colliderect(wall):
+                overlap_left = grubb_rect.right - wall.left
+                overlap_right = wall.right - grubb_rect.left
+                if overlap_left < overlap_right:
+                    grubb["x"] = wall.left - TILE_SIZE
+                else:
+                    grubb["x"] = wall.right
                 grubb["direction"] *= -1
-                grubb["x"] += grubb["speed"] * grubb["direction"]
+                grubb_rect = pygame.Rect(grubb["x"], grubb["y"], TILE_SIZE, TILE_SIZE)
                 break
 
+        # Edge detection
         foran_x = grubb["x"] + (TILE_SIZE if grubb["direction"] == 1 else 0)
         if not any(w.collidepoint(foran_x, grubb["y"] + TILE_SIZE + 1) for _, w in get_wall_rects()):
             grubb["direction"] *= -1
 
+        # Vertical movement
+        grubb["vy"] += gravity
+        grubb["vy"] = min(grubb["vy"], 20)
+        grubb["y"] += grubb["vy"]
+        grubb_rect = pygame.Rect(grubb["x"], grubb["y"], TILE_SIZE, TILE_SIZE)
+
+        # Vertical collision
+        for tile_type, wall in get_wall_rects():
+            if grubb_rect.colliderect(wall):
+                overlap_top = grubb_rect.bottom - wall.top
+                overlap_bottom = wall.bottom - grubb_rect.top
+                if overlap_top < overlap_bottom and tile_type in ("solid", "platform"):
+                    grubb["y"] = wall.top - TILE_SIZE
+                    grubb["vy"] = 0
+                elif overlap_bottom <= overlap_top and tile_type == "solid":
+                    grubb["y"] = wall.bottom
+                    grubb["vy"] = 0
+                grubb_rect = pygame.Rect(grubb["x"], grubb["y"], TILE_SIZE, TILE_SIZE)
+
+        # Bullet hit
         for bullet in bullets[:]:
             if grubb_rect.colliderect(pygame.Rect(bullet[0], bullet[1], bullet_width, bullet_height)):
-                grubb["hp"] -= 1
+                grubb["hp"] -= damage
                 bullets.remove(bullet)
                 if grubb["hp"] <= 0:
                     grubbs.remove(grubb)
+                    gold += gold_fetch
+                    print(gold)
                 break
 
+        # Touch damage
         if grubb in grubbs and grubb_rect.colliderect(player_rect) and player_damage_cooldown <= 0:
             player_hp -= 1
             player_damage_cooldown = 30
+            print(player_hp)
 
+    # Player damage cooldown
     if player_damage_cooldown > 0:
         player_damage_cooldown -= 1
-
-    if len(grubbs) == 0 and wave_active:
+        
+        
+    # Death check
+    if player_hp <= 0:
+        square_x = WIDTH // 2
+        square_y = HEIGHT // 2
+        y_velocity = 0
+        on_ground = False
+        speed = 5
+        player_hp = 5
+        player_max_hp = 5
+        player_damage_cooldown = 0
+        gold_fetch = 10
+        gold = 0
+        fire_rate = 300
+        bullet_speed = 8
+        damage = 1
+        jump_strength = -12
+        bullets = []
+        grubbs = []
+        spawn_queue = []
+        wave = 0
         wave_active = False
+        shop_cards = roll_shop()
+        shop_open = False
 
+    # Wave clear check
+    if len(grubbs) == 0 and len(spawn_queue) == 0 and wave_active:
+        wave_active = False
 
     # Shooting
     if pygame.mouse.get_pressed()[0]:
         now = pygame.time.get_ticks()
         if now - last_shot_time >= fire_rate:
-            bullet_x = square_x + square_size
+            bullet_x = square_x + square_size // 2
             bullet_y = square_y + square_size // 2
 
             mx, my = pygame.mouse.get_pos()
@@ -274,7 +404,7 @@ while True:
         bullet_rect = pygame.Rect(bullet[0], bullet[1], bullet_width, bullet_height)
 
         for tile_type, wall in get_wall_rects():
-            if bullet_rect.colliderect(wall):
+            if tile_type == "solid" and bullet_rect.colliderect(wall):
                 bullets.remove(bullet)
                 break
 
@@ -310,5 +440,25 @@ while True:
             (*apply_camera(grubb["x"], grubb["y"]), TILE_SIZE, TILE_SIZE)
         )
 
+
+
+    # Shop
+    if shop_open:
+        font = pygame.font.Font(None, 28)
+        for i, card in enumerate(shop_cards):
+            card_x = 400 + i * 220
+            card_y = 400
+            pygame.draw.rect(screen, (80, 80, 80), (card_x, card_y, 180, 250))
+            pygame.draw.rect(screen, WHITE, (card_x, card_y, 180, 250), 2)
+            screen.blit(font.render(card["name"], True, WHITE), (card_x + 10, card_y + 20))
+            screen.blit(font.render(f"{card['price']} gold", True, ORANGE), (card_x + 10, card_y + 60))
+        # Reroll button
+        pygame.draw.rect(screen, (60, 60, 60), (400, 680, 200, 50))
+        screen.blit(font.render("Reroll - 25g", True, WHITE), (410, 695))
+        # Gold display
+        screen.blit(font.render(f"Gold: {gold}", True, ORANGE), (400, 370))
+    
+    
+    
     pygame.display.flip()
     clock.tick(60)
